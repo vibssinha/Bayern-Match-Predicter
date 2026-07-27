@@ -1,6 +1,8 @@
+import os
 import requests
 import json
 import sqlite3
+import webbrowser
 from datetime import datetime
 from sklearn.linear_model import LogisticRegression
 import pandas as pd
@@ -9,6 +11,10 @@ import numpy as np
 url = "https://api.football-data.org/v4/"
 api_key = "15f2988156244d89bdd77261ee5bb5b1"
 headers = {"X-Auth-Token": api_key}
+
+SCRIPT_DIR = os.path.dirname(os.path.abspath(__file__))
+TEMPLATE_PATH = os.path.join(SCRIPT_DIR, 'template.html')
+REPORT_PATH = os.path.join(SCRIPT_DIR, 'bayern_prediction.html')
 
 
 #Setup database
@@ -25,7 +31,7 @@ def init_db():
             season          INTEGER NOT NULL,
             home_team_id    INTEGER NOT NULL,
             away_team_id    INTEGER NOT NULL,
-            is_home         INTEGER NOT NULL,   
+            is_home         INTEGER NOT NULL,
             opponent_id     INTEGER NOT NULL,
             opponent_standing INTEGER NOT NULL,
             result          INTEGER NOT NULL,
@@ -118,13 +124,13 @@ def get_previous_matches(conn, X_train, Y_train, standings, year):
             X_train.append([is_home, opp_standing])
             Y_train.append(result)
         return
- 
-    # Not in database – fetch from API
+
+    # Not in database â€“ fetch from API
     params = {"status": "FINISHED", "season": year}
     match_data = requests.get(url=f'{url}/teams/5/matches', headers=headers, params=params)
     matches = match_data.json()['matches']
     rows_to_insert = []
- 
+
     for match in matches:
         if int(match['competition']['id']) != 2002:
             continue
@@ -132,7 +138,7 @@ def get_previous_matches(conn, X_train, Y_train, standings, year):
         home_id = int(match['homeTeam']['id'])
         away_id = int(match['awayTeam']['id'])
         match_date = match.get('utcDate', '')
- 
+
         if home_id == 5:
             X_train_data.append(1)
             opponent_id = away_id
@@ -161,10 +167,10 @@ def get_previous_matches(conn, X_train, Y_train, standings, year):
             else:
                 Y_train.append(0)
                 result = 0
- 
+
         X_train.append(X_train_data)
         rows_to_insert.append((year, home_id, away_id, X_train_data[0], opponent_id, opponent_current_standing, result, match_date))
- 
+
     # Bulk insert the values into database
     c.executemany('''
         INSERT OR IGNORE INTO matches
@@ -177,31 +183,111 @@ def get_previous_matches(conn, X_train, Y_train, standings, year):
 
 
 def get_next_match(X_predict, standings):
+    """Fetch Bayern's next Bundesliga fixture and return everything the
+    front end needs: opponent identity, crest URLs, standings, and the
+    feature row appended to X_predict for the model."""
     params = {"status": "SCHEDULED", "limit": 3}
     resp = requests.get(url=f'{url}/teams/5/matches', headers=headers, params=params)
     match_data = resp.json()
 
     if resp.status_code != 200:
         print("Error: Unable to fetch upcoming match data")
-        return
+        return None
 
     index = 0
     while match_data['matches'][index]['competition']['id'] != 2002:
         index += 1
 
     match = match_data['matches'][index]
-    if match['awayTeam']['id'] == 5:
-        opponent_id = match['homeTeam']['id']
-        is_home = 0
-    else:
-        opponent_id = match['awayTeam']['id']
-        is_home = 1
+    home_team = match['homeTeam']
+    away_team = match['awayTeam']
 
-    X_predict.append([is_home, get_current_standing(opponent_id, standings)])
-    if match['awayTeam']['id'] == 5:
-        return match['homeTeam']['name']
+    if away_team['id'] == 5:
+        is_home = 0
+        opponent = home_team
+        bayern_crest = away_team.get('crest', '')
     else:
-        return match['awayTeam']['name']
+        is_home = 1
+        opponent = away_team
+        bayern_crest = home_team.get('crest', '')
+
+    opponent_standing = get_current_standing(team_id=opponent['id'], standings=standings)
+    X_predict.append([is_home, opponent_standing])
+
+    return {
+        'opponent_name': opponent['name'],
+        'opponent_crest': opponent.get('crest', ''),
+        'opponent_standing': opponent_standing,
+        'bayern_crest': bayern_crest,
+        'is_home': is_home,
+        'match_date_display': _format_match_date(match.get('utcDate', '')),
+    }
+
+
+def _format_match_date(utc_date_str):
+    if not utc_date_str:
+        return 'Date TBD'
+    try:
+        dt = datetime.strptime(utc_date_str, '%Y-%m-%dT%H:%M:%SZ')
+        return dt.strftime('%a, %b %d, %Y Â· %I:%M %p UTC')
+    except ValueError:
+        return utc_date_str
+
+
+def _ordinal(n):
+    if n is None:
+        return ''
+    if 10 <= n % 100 <= 20:
+        suffix = 'th'
+    else:
+        suffix = {1: 'st', 2: 'nd', 3: 'rd'}.get(n % 10, 'th')
+    return f'{n}{suffix}'
+
+
+def _team_initials(name):
+    words = [w for w in name.split() if w.isalpha()]
+    if not words:
+        return name[:3].upper()
+    if len(words) == 1:
+        return words[0][:3].upper()
+    return ''.join(w[0] for w in words[:3]).upper()
+
+
+def _crest_html(crest_url, fallback_text):
+    if crest_url:
+        return f'<img src="{crest_url}" alt="{fallback_text} crest">'
+    return f'<div class="crest-fallback">{fallback_text}</div>'
+
+
+def generate_html_report(match_info, win_pct, draw_pct, loss_pct, current_standings):
+    """Fill template.html with this run's prediction and write out a
+    ready-to-open bayern_prediction.html next to this script."""
+    with open(TEMPLATE_PATH, 'r', encoding='utf-8') as f:
+        html = f.read()
+
+    bayern_standing = get_current_standing(5, current_standings)
+
+    replacements = {
+        '__HOME_CLASS__': 'home-game' if match_info['is_home'] else 'away-game',
+        '__OPPONENT_NAME__': match_info['opponent_name'],
+        '__MATCH_DATE__': match_info['match_date_display'],
+        '__VENUE_LABEL__': 'Home' if match_info['is_home'] else 'Away',
+        '__BAYERN_LOGO__': _crest_html(match_info['bayern_crest'], 'FCB'),
+        '__OPPONENT_LOGO__': _crest_html(match_info['opponent_crest'], _team_initials(match_info['opponent_name'])),
+        '__BAYERN_STANDING__': f'Bundesliga Â· {_ordinal(bayern_standing)}' if bayern_standing else 'Bundesliga',
+        '__OPPONENT_STANDING__': f"Bundesliga Â· {_ordinal(match_info['opponent_standing'])}" if match_info['opponent_standing'] else 'Bundesliga',
+        '__WIN_PCT__': f'{win_pct * 100:.0f}',
+        '__DRAW_PCT__': f'{draw_pct * 100:.0f}',
+        '__LOSS_PCT__': f'{loss_pct * 100:.0f}',
+    }
+
+    for token, value in replacements.items():
+        html = html.replace(token, str(value))
+
+    with open(REPORT_PATH, 'w', encoding='utf-8') as f:
+        f.write(html)
+
+    return REPORT_PATH
 
 
 
@@ -221,8 +307,10 @@ if __name__ == "__main__":
     get_previous_matches(conn, X_train, Y_train, one_year_past,  int(one_year_past['filters']['season']))
     get_previous_matches(conn, X_train, Y_train, current_standings, int(current_standings['filters']['season']))
 
-    print("\nFetching next match against " + get_next_match(X_predict, current_standings))
-    
+    match_info = get_next_match(X_predict, current_standings)
+    if match_info is None:
+        raise SystemExit("Could not determine the next match.")
+    print("\nFetching next match against " + match_info['opponent_name'])
 
     # This creates an exponential sample weight where the more recent matches are given higher priority/have more weight
     sample_size = len(X_train)
@@ -243,5 +331,14 @@ if __name__ == "__main__":
     results['Probability'] = results['Probability'].apply(lambda x: f'{x:.2%}')
     print("\nProbabilities:")
     print(results.to_string(index=False))
+
+    # probability[0] is ordered [Loss, Draw, Win] to match model.classes_
+    loss_pct, draw_pct, win_pct = probability[0]
+    report_path = generate_html_report(match_info, win_pct, draw_pct, loss_pct, current_standings)
+    print(f"\nSaved matchday forecast page to {report_path}")
+    try:
+        webbrowser.open(f'file://{report_path}')
+    except Exception:
+        pass
 
     conn.close()
