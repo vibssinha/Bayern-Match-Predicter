@@ -1,0 +1,315 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>FC Bayern MÃ¼nchen â€” Next Match Forecast</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Bebas+Neue&family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+<style>
+  :root {
+    --red: #DC052D;
+    --red-deep: #6E0E1E;
+    --red-darker: #400a13;
+    --cream: #FBF6EF;
+    --ink: #1B1712;
+    --ink-soft: #6b6259;
+    --win: #1E8E5A;
+    --win-bg: #E5F3EC;
+    --draw: #6B6B6B;
+    --draw-bg: #ECEAE6;
+    --loss: #C41230;
+    --loss-bg: #FBE8E9;
+    --track: #EFE9DF;
+  }
+
+  * { box-sizing: border-box; }
+
+  html, body {
+    margin: 0;
+    padding: 0;
+    min-height: 100vh;
+  }
+
+  body {
+    font-family: 'Inter', -apple-system, BlinkMacSystemFont, sans-serif;
+    color: var(--ink);
+    background:
+      repeating-linear-gradient(
+        135deg,
+        rgba(255,255,255,0.05) 0px,
+        rgba(255,255,255,0.05) 2px,
+        transparent 2px,
+        transparent 34px
+      ),
+      radial-gradient(ellipse 900px 600px at 50% -10%, rgba(255,255,255,0.18), transparent 60%),
+      linear-gradient(160deg, var(--red) 0%, var(--red-deep) 55%, var(--red-darker) 100%);
+    background-attachment: fixed;
+    min-height: 100vh;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    padding: 40px 20px;
+  }
+
+  .scoreboard {
+    width: 100%;
+    max-width: 780px;
+    background: var(--cream);
+    border-radius: 10px;
+    overflow: hidden;
+    box-shadow: 0 30px 60px -20px rgba(0,0,0,0.55), 0 0 0 1px rgba(0,0,0,0.05);
+  }
+
+  .scoreboard__bezel {
+    height: 8px;
+    background: linear-gradient(90deg, var(--red-deep), var(--red) 50%, var(--red-deep));
+  }
+
+  .scoreboard__header {
+    text-align: center;
+    padding: 34px 32px 8px;
+  }
+
+  .eyebrow {
+    margin: 0 0 10px;
+    font-size: 12px;
+    font-weight: 700;
+    letter-spacing: 0.22em;
+    text-transform: uppercase;
+    color: var(--red);
+  }
+
+  .scoreboard__header h1 {
+    margin: 0;
+    font-family: 'Bebas Neue', 'Inter', sans-serif;
+    font-weight: 400;
+    font-size: clamp(34px, 6vw, 50px);
+    letter-spacing: 0.03em;
+    line-height: 1;
+    text-transform: uppercase;
+  }
+
+  .fixture-meta {
+    margin: 10px 0 0;
+    font-size: 14px;
+    color: var(--ink-soft);
+    font-weight: 500;
+  }
+
+  .fixture-meta strong {
+    color: var(--ink);
+    font-weight: 700;
+  }
+
+  .matchup {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: clamp(16px, 4vw, 44px);
+    padding: 30px 32px 8px;
+  }
+
+  .team {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 12px;
+    flex: 0 0 auto;
+    width: 130px;
+  }
+
+  .crest {
+    width: 108px;
+    height: 108px;
+    border-radius: 50%;
+    background: #fff;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    box-shadow: 0 8px 20px rgba(0,0,0,0.18), 0 0 0 4px var(--cream), 0 0 0 6px rgba(0,0,0,0.08);
+    overflow: hidden;
+  }
+
+  .crest img {
+    width: 76%;
+    height: 76%;
+    object-fit: contain;
+  }
+
+  .crest-fallback {
+    width: 100%;
+    height: 100%;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-family: 'Bebas Neue', sans-serif;
+    font-size: 30px;
+    letter-spacing: 0.04em;
+    color: #fff;
+    background: linear-gradient(155deg, var(--red), var(--red-deep));
+  }
+
+  .team--opponent .crest-fallback {
+    background: linear-gradient(155deg, #6b6b6b, #3a3a3a);
+  }
+
+  .team-label {
+    font-family: 'Bebas Neue', sans-serif;
+    font-size: 18px;
+    letter-spacing: 0.04em;
+    text-transform: uppercase;
+    text-align: center;
+    line-height: 1.05;
+  }
+
+  .team-sub {
+    margin-top: -8px;
+    font-size: 11px;
+    font-weight: 700;
+    letter-spacing: 0.14em;
+    text-transform: uppercase;
+    color: var(--ink-soft);
+  }
+
+  .odds {
+    flex: 1 1 auto;
+    max-width: 340px;
+    display: flex;
+    flex-direction: column;
+    gap: 14px;
+  }
+
+  .odds-row {
+    display: grid;
+    grid-template-columns: 52px 1fr 58px;
+    align-items: center;
+    gap: 12px;
+    padding: 10px 14px;
+    border-radius: 8px;
+  }
+
+  .odds-row--win  { background: var(--win-bg); }
+  .odds-row--draw { background: var(--draw-bg); }
+  .odds-row--loss { background: var(--loss-bg); }
+
+  .odds-label {
+    font-size: 11px;
+    font-weight: 800;
+    letter-spacing: 0.1em;
+    text-transform: uppercase;
+  }
+
+  .odds-row--win .odds-label  { color: var(--win); }
+  .odds-row--draw .odds-label { color: var(--draw); }
+  .odds-row--loss .odds-label { color: var(--loss); }
+
+  .odds-bar {
+    height: 8px;
+    border-radius: 5px;
+    background: var(--track);
+    overflow: hidden;
+  }
+
+  .odds-bar__fill {
+    height: 100%;
+    border-radius: 5px;
+  }
+
+  .odds-row--win .odds-bar__fill  { background: var(--win); }
+  .odds-row--draw .odds-bar__fill { background: var(--draw); }
+  .odds-row--loss .odds-bar__fill { background: var(--loss); }
+
+  .odds-pct {
+    font-family: 'Bebas Neue', sans-serif;
+    font-size: 24px;
+    text-align: right;
+    line-height: 1;
+  }
+
+  .odds-row--win .odds-pct  { color: var(--win); }
+  .odds-row--draw .odds-pct { color: var(--draw); }
+  .odds-row--loss .odds-pct { color: var(--loss); }
+
+  .scoreboard__footer {
+    text-align: center;
+    padding: 20px 32px 30px;
+  }
+
+  .scoreboard__footer p {
+    margin: 0;
+    font-size: 11.5px;
+    color: var(--ink-soft);
+    letter-spacing: 0.02em;
+  }
+
+  /* Home game: Bayern on the right, opponent on the left */
+  body.home-game .team--bayern   { order: 3; }
+  body.home-game .odds           { order: 2; }
+  body.home-game .team--opponent { order: 1; }
+
+  /* Away game: Bayern on the left, opponent on the right */
+  body.away-game .team--bayern   { order: 1; }
+  body.away-game .odds           { order: 2; }
+  body.away-game .team--opponent { order: 3; }
+
+  @media (max-width: 560px) {
+    .matchup {
+      flex-direction: column;
+      gap: 20px;
+    }
+    .odds { max-width: 100%; width: 100%; }
+    .team { width: 100%; flex-direction: row; justify-content: center; }
+    .crest { width: 64px; height: 64px; }
+    .crest-fallback { font-size: 18px; }
+  }
+</style>
+</head>
+<body class="__HOME_CLASS__">
+  <div class="scoreboard">
+    <div class="scoreboard__bezel"></div>
+    <header class="scoreboard__header">
+      <p class="eyebrow">Bundesliga Â· Matchday Forecast</p>
+      <h1>FC Bayern MÃ¼nchen</h1>
+      <p class="fixture-meta"><strong>vs __OPPONENT_NAME__</strong> Â· __MATCH_DATE__ Â· __VENUE_LABEL__</p>
+    </header>
+
+    <div class="matchup">
+      <div class="team team--bayern">
+        <div class="crest">__BAYERN_LOGO__</div>
+        <div class="team-label">Bayern</div>
+        <div class="team-sub">__BAYERN_STANDING__</div>
+      </div>
+
+      <div class="odds">
+        <div class="odds-row odds-row--win">
+          <span class="odds-label">Win</span>
+          <div class="odds-bar"><div class="odds-bar__fill" style="width: __WIN_PCT__%;"></div></div>
+          <span class="odds-pct">__WIN_PCT__%</span>
+        </div>
+        <div class="odds-row odds-row--draw">
+          <span class="odds-label">Draw</span>
+          <div class="odds-bar"><div class="odds-bar__fill" style="width: __DRAW_PCT__%;"></div></div>
+          <span class="odds-pct">__DRAW_PCT__%</span>
+        </div>
+        <div class="odds-row odds-row--loss">
+          <span class="odds-label">Loss</span>
+          <div class="odds-bar"><div class="odds-bar__fill" style="width: __LOSS_PCT__%;"></div></div>
+          <span class="odds-pct">__LOSS_PCT__%</span>
+        </div>
+      </div>
+
+      <div class="team team--opponent">
+        <div class="crest">__OPPONENT_LOGO__</div>
+        <div class="team-label">__OPPONENT_NAME__</div>
+        <div class="team-sub">__OPPONENT_STANDING__</div>
+      </div>
+    </div>
+
+    <footer class="scoreboard__footer">
+      <p>Modeled from the last three Bundesliga seasons with a recency-weighted logistic regression Â· Data via football-data.org</p>
+    </footer>
+  </div>
+</body>
+</html>
