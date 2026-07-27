@@ -9,7 +9,7 @@ import pandas as pd
 import numpy as np
 
 url = "https://api.football-data.org/v4/"
-api_key = "15f2988156244d89bdd77261ee5bb5b1"
+api_key = "***"
 headers = {"X-Auth-Token": api_key}
 
 SCRIPT_DIR = os.path.dirname(os.path.abspath(__file__))
